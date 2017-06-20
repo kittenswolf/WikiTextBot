@@ -1,3 +1,7 @@
+# WikiTextBot made by https://github.com/kittenswolf
+# Bot in action: reddit.com/u/WikiTextBot
+# reddit.com/u/kittens_from_space
+
 # import bot_detector as bd     # Currently not in use
 import urllib.request
 import subprocess
