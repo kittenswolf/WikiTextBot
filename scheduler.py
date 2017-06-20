@@ -1,3 +1,7 @@
+# WikiTextBot made by https://github.com/kittenswolf
+# Bot in action: reddit.com/u/WikiTextBot
+# reddit.com/u/kittens_from_space
+
 import time
 import subprocess
 
