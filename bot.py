@@ -3,6 +3,7 @@
 # reddit.com/u/kittens_from_space
 
 # import bot_detector as bd     # Currently not in use
+from bs4 import BeautifulSoup
 import urllib.request
 import subprocess
 import wikipedia
@@ -160,24 +161,17 @@ def locateByName(e, name):
 def get_wikipedia_links(input_text):
     """Gets en.wikipedia.org link in input_text. If it can't be found, returns []"""
     
+    soup = BeautifulSoup(input_text, "lxml")
+    
     fixed_urls = []
     urls = re.findall(r'(https?://[^\s]+)', input_text)
     
-    for url in urls:
-        if "en.wikipedia.org/wiki/" in url.lower():
-            while url[-1:] not in normal_chars:
-                fixed_url = url[:-1]
-                url = fixed_url
-            
-            fixed_urls.append(url)
-            
-        if "en.m.wikipedia.org/wiki/" in url.lower():
-            while url[-1:] not in normal_chars:
-                fixed_url = url[:-1]
-                url = fixed_url
-            
-            fixed_urls.append(url)
-            
+    for url in soup.findAll('a'):
+        try:
+            fixed_urls.append(url['href'])
+        except Exception:
+            pass
+    
     """Deletes duplicates"""
     done_urls = []
     for i in fixed_urls:
@@ -191,6 +185,8 @@ def get_wikipedia_links(input_text):
             if not extension.lower() in url.lower():
                 fixed_urls.append(url)
                 break
+                
+    soup.decompose()
 
     return fixed_urls
 
@@ -290,7 +286,7 @@ def generate_footer():
     footer += " ^]"
     footer = replace_right(footer, footer_seperator, "", 1)
     
-    footer += "\n" + downvote_remove + " ^| ^v0.22"
+    footer += "\n" + downvote_remove + " ^| ^v0.23"
 
     return footer
 
@@ -404,7 +400,7 @@ def monitorMessages():
             input_cache(msg_cache_file, message.id)
 
 def enter_bot(file, input_user):
-    return
+    return #Not in use
     
     
     """Enter a user as a bot to $file"""
@@ -423,7 +419,7 @@ def enter_bot(file, input_user):
 
 def get_bot_list(file):
     # Currently not used. Maybe soon?
-    return ["HelperBot_", "AutoModerator", "MovieGuide"]
+    return ["HelperBot_", "AutoModerator", "MovieGuide", "Decronym"]
 
 
     try:
@@ -466,7 +462,7 @@ def main():
                             enter_bot(bot_list_file, str(comment.author))
                             print(str(comment.author) + " is a bot")
                         else:
-                            urls = get_wikipedia_links(comment.body)
+                            urls = get_wikipedia_links(comment.body_html)
         
                             if not urls == []:
                                 comment_text = generate_comment(urls)
