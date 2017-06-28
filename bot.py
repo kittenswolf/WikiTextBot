@@ -42,7 +42,8 @@ footer_links = [
                  ["PM", "https://www.reddit.com/message/compose?to=kittens_from_space"],
                  [exclude[0], "https://reddit.com/message/compose?to=WikiTextBot&message=" + exclude[0].replace(" ", "") + "&subject=" + exclude[0].replace(" ", "")],
                  [exclude[1], "https://np.reddit.com/r/SUBREDDITNAMEHERE/about/banned"],
-                 ["FAQ / Information", "https://np.reddit.com/r/WikiTextBot/wiki/index"]
+                 ["FAQ / Information", "https://np.reddit.com/r/WikiTextBot/wiki/index"],
+                 ["Source", "https://github.com/kittenswolf/WikiTextBot"]
                ]
                
 downvote_remove = "^Downvote ^to ^remove"
@@ -286,7 +287,7 @@ def generate_footer():
     footer += " ^]"
     footer = replace_right(footer, footer_seperator, "", 1)
     
-    footer += "\n" + downvote_remove + " ^| ^v0.23"
+    footer += "\n" + downvote_remove + " ^| ^v0.24"
 
     return footer
 
@@ -358,8 +359,11 @@ def includeUser(file, input_user):
         print(file + " doesnt exist?")
         return
         
-    current_excluded = [user.lower() for user in raw_file.split("\n")]
-    current_excluded.remove(input_user)
+    try:
+        current_excluded = [user.lower() for user in raw_file.split("\n")]
+        current_excluded.remove(input_user)
+    except Exception:
+        pass
     
     with open(file, "w") as f:
         for user in current_excluded:
