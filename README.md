@@ -8,5 +8,5 @@ Please note that this is very undocumented. *Some code is sloppy, bad practice o
 # Requirements
 - PRAW
 - Wikipedia
+- BeautifulSoup4
 - sentences (included in the folder)
-
