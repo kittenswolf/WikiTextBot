@@ -2,28 +2,23 @@
 # Bot in action: reddit.com/u/WikiTextBot
 # reddit.com/u/kittens_from_space
 
-# import bot_detector as bd     # Currently not in use
 from bs4 import BeautifulSoup
 import urllib.request
 import urllib.parse
-import subprocess
 import wikipedia
-import sentences
-import traceback
-import hashlib
 import random
 import time
-import json
 import praw
 import praw.exceptions
-import re
+import prawcore
+import persistentlist as pl
 
 # Settings 
 
-msg_cache_file = "cache/msg_cache.txt"
-cache_file = "cache/com_cache.txt"
-user_blacklist_file = "user_blacklist.txt"
-bot_list_file = "bots.txt"  # Currently not in use
+msg_cache = pl.PersistentList('cache/msg_cache.txt')
+com_cache = pl.PersistentList('cache/com_cache.txt')
+user_blacklist = pl.PersistentList('user_blacklist.txt', mapf=str.lower)  # case insensitive comparisons
+bot_blacklist = pl.PersistentList('bot_blacklist.txt', mapf=str.lower)
 
 # bd_debug = False
 
@@ -77,6 +72,14 @@ if __name__ == '__main__':
     print("Logged in.")
 
 
+def unique(seq):
+    seen = set()
+    for value in seq:
+        if value not in seen:
+            seen.add(value)
+            yield value
+
+
 def get_thumbnail(input_id):
     # Currently not used
     page = wikipedia.page(pageid=input_id)
@@ -116,41 +119,6 @@ def replace_right(source, target, replacement, replacements=None):
     return replacement.join(source.rsplit(target, replacements))
 
 
-def get_cache(file):
-    """Gets the cache from $file and clears to len(comment_threshold) if necesarry. Also saves it after."""
-    try:
-        raw_cache = open(file, "r").read()
-    except Exception as e:
-        print(file + " doesnt exist?")
-        return []
-
-    cache = list(raw_cache.split('\n'))
-
-    real_cache = list(filter(None, cache))  # remove empty elements from cache
-
-    """Trims the file if it goes over maximum threshold"""
-    # Currently done manually... dont ask why.
-    # if len(real_cache) > comment_threshold:
-    # last_part = real_cache[-limit:]
-
-    # with open(file, "w") as f:
-    # for id in last_part:
-    # f.write(id + "\n")
-
-    # real_cache = last_part
-
-    return real_cache
-
-
-def input_cache(file, input):
-    try:
-        with open(file, "a") as f:
-            f.write(input + "\n")
-    except FileNotFoundError as e:
-        print(e)
-        return
-
-
 def locateByName(e, name):
     if e.get('name', None) == name:
         return e
@@ -178,10 +146,12 @@ def get_wikipedia_articles(input_text):
 
     soup = BeautifulSoup(input_text, "html.parser")
     urls = [urllib.parse.urlparse(a['href']) for a in soup.findAll('a')]
-    urls = map(get_article, urls)
-    urls = filter(None, urls)
 
-    return list(urls)
+    articles = map(get_article, urls)
+    articles = filter(None, articles)
+    articles = list(unique(articles))
+
+    return articles
 
 
 def get_wiki_text(article, heading):
@@ -263,170 +233,67 @@ def generate_comment(articles):
     return comment
 
 
-def check_excluded(file, input_user):
-    try:
-        with open(file) as f:
-            contents = f.read()
-    except FileNotFoundError as e:
-        print(e)
-        return
-
-    current_excluded = map(str.lower, contents.split('\n'))
-
-    return input_user.lower() in current_excluded
-
-
-def excludeUser(file, input_user):
-    with open(file, 'a') as f:
-        f.write(input_user + '\n')
-
-
-def includeUser(file, input_user):
-    try:
-        with open(file) as f:
-            contents = f.read()
-    except FileNotFoundError as e:
-        print(file + " doesnt exist?")
-        return
-
-    current_excluded = [user.lower() for user in contents.split('\n') if user != input_user]
-
-    with open(file, "w") as f:
-        for user in current_excluded:
-            f.write(user + "\n")
-
-
 def monitorMessages():
     """Montors the newest 100 messages and excludes/includes users requesting it."""
 
     for message in reddit.inbox.messages(limit=100):
-        current_msg_cache = get_cache(msg_cache_file)
-
-        if message.id not in current_msg_cache:
+        if message.id not in msg_cache:
             author = str(message.author)
 
-            if not author == bot_username:
+            if author != bot_username:
 
                 if exclude[0].replace(" ", "").lower() == message.subject.lower():
-                    already_excluded = check_excluded(user_blacklist_file, author)
-
-                    if already_excluded == True:
+                    if author in user_blacklist:
                         message.reply(user_already_excluded)
                     else:
                         print("Excluding the user '" + author + "'")
-                        excludeUser(user_blacklist_file, author)
+                        user_blacklist.append(author)
                         message.reply(user_exclude_done)
 
                 if include.lower() == message.subject.lower():
-                    already_excluded = check_excluded(user_blacklist_file, author)
-
-                    if already_excluded == True:
+                    if author in user_blacklist:
                         print("Including the user '" + author + "'")
-                        includeUser(user_blacklist_file, author)
+                        user_blacklist.remove(author)
                         message.reply(user_include_done)
                     else:
                         message.reply(user_not_excluded)
 
-            input_cache(msg_cache_file, message.id)
-
-
-def enter_bot(file, input_user):
-    return  # Not in use
-
-    """Enter a user as a bot to $file"""
-    try:
-        raw_file = open(file, "r").read()
-    except Exception as e:
-        print(file + " doesnt exist?")
-        return
-
-    current_bots = get_bot_list(file)
-    current_bots.append(input_user)
-
-    with open(file, "w") as f:
-        for bot in current_bots:
-            f.write(bot + "\n")
-
-
-def get_bot_list(file):
-    # Currently not used. Maybe soon?
-    return ["HelperBot_", "AutoModerator", "MovieGuide", "Decronym"]
-
-    try:
-        raw_file = open(file, "r").read()
-    except Exception as e:
-        print(file + " doesnt exist?")
-        return []
-
-    bots = [bot for bot in raw_file.split("\n") if not bot == '']
-    return bots
-
-
-def check_bot(input_user):
-    # Currently not used
-    return "-"
-
-    # score = bd.calc_bot_score(input_user)
-
-    # if not score == "Error":
-    # verdict = bd.score_helper(score)
-    # return verdict
-    # else:
-    # return "-"
-
+            msg_cache.append(message.id)
 
 def main():
-    # monitorMessages() # todo: re-enable
+    if not reddit.read_only:
+        monitorMessages()
     for comment in reddit.subreddit('all').comments(limit=100):
-        # Check if "wikipedia.org/wiki/" in comment. This should migate most comment.id spam
-        if "wikipedia.org/wiki/" in str(comment.body).lower():
 
-            # todo: if user is not blacklisted (also blacklist bots)
-            # todo: if user is not in cache
+        if 'wikipedia.org/wiki/' not in str(comment.body).lower():
+            continue
 
-            if comment.id not in get_cache(cache_file):
-                if not check_excluded(user_blacklist_file, str(comment.author)):
-                    input_cache(cache_file, comment.id)
+        if comment.id in com_cache:
+            continue
 
-                    articles = get_wikipedia_articles(comment.body_html)
+        com_cache.append(comment.id)
 
-                    if articles:
-                        comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(
-                            comment.subreddit))  # todo move this to footer generation
+        if comment.author in user_blacklist or comment.author in bot_blacklist:
+            continue
 
-                        if comment_text != "Error":
-                            print('Replying to ' + str(comment.author) + ' in /r/' + str(
-                                comment.subreddit) + ": " + comment.link_permalink + comment.id)
-                            print('=' * 100)
-                            print(comment_text)
-                            print('=' * 100)
+        articles = get_wikipedia_articles(comment.body_html)
 
-                            # # Check if user is blacklisted (excluded)
-                            # if not check_excluded(user_blacklist_file, str(comment.author)) == True:
-                            #     # Check if id is in cache
-                            #     if not comment.id in get_cache(cache_file):
-                            #         # Check if user is in already bot list:
-                            #         if not str(comment.author) in get_bot_list(bot_list_file):
-                            #
-                            #             # Check if user is bot
-                            #             # Currently not used
-                            #             if check_bot(str(comment.author)) == "+":
-                            #                 enter_bot(bot_list_file, str(comment.author))
-                            #                 print(str(comment.author) + " is a bot")
-                            #             else:
-                            #                 urls = get_wikipedia_links(comment.body_html)
-                            #
-                            #                 if not urls == []:
-                            #                     comment_text = generate_comment(urls)
-                            #                     comment_text = comment_text.replace("SUBREDDITNAMEHERE", str(comment.subreddit))
-                            #
-                            #                     if not comment_text == "Error":
-                            #                         print("Replying to " + str(comment.author) + " in /r/" + str(comment.subreddit))
-                            #
-                            #                         # print(comment_text)
-                            #                         # comment.reply(comment_text)
-                            #
-                            #     input_cache(cache_file, comment.id)
+        if not articles:
+            continue
+
+        # todo move this to footer generation
+        comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(comment.subreddit))
+
+        if comment_text == "Error":
+            continue
+
+        print('Replying to ' + str(comment.author) + ' in /r/' + str(
+            comment.subreddit) + ": " + comment.link_permalink + comment.id)
+        print('=' * 100)
+        print(comment_text)
+        print('=' * 100)
+
+        comment.reply(comment_text)
 
 
 if __name__ == '__main__':
@@ -439,6 +306,9 @@ if __name__ == '__main__':
         except praw.exceptions.APIException as e:
             print('ratelimit hit, sleeping 100 secs.')
             time.sleep(100)
+        except prawcore.ResponseException as e:
+            print(e)
             # except Exception as e:
             #     if str(e) not in errors_to_not_print:
             #         print(e)
+            #         print(type(e))
