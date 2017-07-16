@@ -78,10 +78,7 @@ def get_thumbnail(input_id):
 
     page_title = page.title
 
-    max_extension_len = 0
-    for extension in image_extensions:
-        if len(extension) > max_extension_len:
-            max_extension_len = len(extension)
+    max_extension_len = max(map(len, image_extensions))
 
     good_images = []
     for url in images:
@@ -102,7 +99,7 @@ def get_thumbnail(input_id):
                     thumbnail_images.append(url)
 
 
-        if not thumbnail_images == []:
+        if thumbnail_images:
             thumbnail = random.choice(thumbnail_images)
         else:
             thumbnail = random.choice(images)
@@ -122,12 +119,9 @@ def get_cache(file):
         print(file + " doesnt exist?")
         return []
 
-    cache = [id for id in raw_cache.split("\n")]
+    cache = list(raw_cache.split('\n'))
 
-    real_cache = []
-    for id in cache:
-        if not id == '':
-            real_cache.append(id)
+    real_cache = list(filter(None, cache))  # remove empty elements from cache
 
     """Trims the file if it goes over maximum threshold"""
     # Currently done manually... dont ask why.
@@ -146,8 +140,8 @@ def input_cache(file, input):
     try:
         with open(file, "a") as f:
             f.write(input + "\n")
-    except Exception as e:
-        print(file + " doesnt exist?")
+    except FileNotFoundError as e:
+        print(e)
         return
 
 def locateByName(e, name):
@@ -175,11 +169,7 @@ def get_wikipedia_links(input_text):
         except Exception:
             pass
 
-    """Deletes duplicates"""
-    done_urls = []
-    for i in fixed_urls:
-        if i not in done_urls:
-            done_urls.append(i)
+    done_urls = set(fixed_urls)  # removes duplicates
 
     """Deletes urls that contain a file extension"""
     fixed_urls = []
@@ -251,13 +241,12 @@ def generate_comment(input_urls):
     for url in input_urls:
         url_content = get_wiki_text(url)
 
-        if not url_content == "Error":
+        if url_content != "Error":
             content.append(url_content)
 
 
     for chunk in content:
-        title = chunk[0]
-        body  = chunk[1]
+        title, body = chunk
 
         body = body.replace("\n", "\n\n")
 
@@ -265,7 +254,7 @@ def generate_comment(input_urls):
         comment.append(body)
         comment.append("\n***\n")
 
-    if comment == []:
+    if not comment:
         return "Error"
 
     for line in comment:
@@ -278,44 +267,29 @@ def generate_comment(input_urls):
 
 def check_excluded(file, input_user):
     try:
-        raw_file = open(file, "r").read()
-    except Exception as e:
-        print(file + " doesnt exist?")
+        with open(file) as f:
+            contents = f.read()
+    except FileNotFoundError as e:
+        print(e)
         return
 
-    current_excluded = [user.lower() for user in raw_file.split("\n")]
+    current_excluded = map(str.lower, contents.split('\n'))
 
-    if input_user.lower() in current_excluded:
-        return True
-    else:
-        return False
+    return input_user.lower() in current_excluded
 
 def excludeUser(file, input_user):
-    try:
-        raw_file = open(file, "r").read()
-    except Exception as e:
-        print(file + " doesnt exist?")
-        return
-
-    current_excluded = [user.lower() for user in raw_file.split("\n")]
-    current_excluded.append(input_user)
-
-    with open(file, "w") as f:
-        for user in current_excluded:
-            f.write(user + "\n")
+    with open(file, 'a') as f:
+        f.write(input_user + '\n')
 
 def includeUser(file, input_user):
     try:
-        raw_file = open(file, "r").read()
-    except Exception as e:
+        with open(file) as f:
+            contents = f.read()
+    except FileNotFoundError as e:
         print(file + " doesnt exist?")
         return
 
-    try:
-        current_excluded = [user.lower() for user in raw_file.split("\n")]
-        current_excluded.remove(input_user)
-    except Exception:
-        pass
+    current_excluded = [user.lower() for user in contents.split('\n') if user != input_user]
 
     with open(file, "w") as f:
         for user in current_excluded:
@@ -327,7 +301,7 @@ def monitorMessages():
     for message in reddit.inbox.messages(limit=100):
         current_msg_cache = get_cache(msg_cache_file)
 
-        if not message.id in current_msg_cache:
+        if message.id not in current_msg_cache:
             author = str(message.author)
 
             if not author == bot_username:
