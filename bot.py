@@ -5,6 +5,7 @@
 # import bot_detector as bd     # Currently not in use
 from bs4 import BeautifulSoup
 import urllib.request
+import urllib.parse
 import subprocess
 import wikipedia
 import sentences
@@ -193,84 +194,34 @@ def get_wikipedia_links(input_text):
     return fixed_urls
 
 def get_wiki_text(original_link):
-    wiki_subject = original_link.split("/wiki/")[1]
-
-    anchor = False
-    if "#" in wiki_subject:
-        try:
-            # Anchor detected
-
-            # First, get page id
-            request_url = intro_wikipedia_link + wiki_subject
-            request_url = request_url.replace("NUMHERE__1", str(num_sentences))
-
-            response = urllib.request.urlopen(request_url).read().decode("utf-8")
-            json_data = json.loads(response)
-            page_id = [key for key in json_data["query"]["pages"]][0]
-
-            ##
-
-            wanted_anchor = wiki_subject.split("#")[1].replace("_", " ")
-            pure_subject = wiki_subject.split("#")[0]
-
-            page = wikipedia.page(pageid=page_id)
-            anchor_text = page.section(wanted_anchor)
-
-            list_trimmed_text = sentences.split(anchor_text)[:num_sentences]
-
-            final_text = []
-            for sentence in list_trimmed_text:
-                if final_text == []:
-                    final_text.append(sentence)
-                else:
-                    final_text.append(" " + sentence)
-
-            trimmed_text = ''.join(final_text)
-
-            if trimmed_text == '':
-                return "Error"
-
-            for string in disallowed_strings:
-                if string.lower() in str(page.title).lower():
-                    return "Error"
-
-            for string in body_disallowed_strings:
-                if string.lower() in trimmed_text.lower():
-                    return "Error"
-
-            return [page.title + ": " + wanted_anchor, trimmed_text]
-
-        except Exception as e:
-            return "Error"
-
-
-    request_url = intro_wikipedia_link + wiki_subject
-    request_url = request_url.replace("NUMHERE__1", str(num_sentences))
-
     try:
-        response = urllib.request.urlopen(request_url).read().decode("utf-8")
-        json_data = json.loads(response)
-        page_key = [key for key in json_data["query"]["pages"]][0]
+        parse_res = urllib.parse.urlparse(original_link)
+        title = parse_res.path[6:].replace('_', ' ')
+        section = parse_res.fragment.replace('_', ' ')
 
-        title = json_data["query"]["pages"][page_key]["title"]
-        body = json_data["query"]["pages"][page_key]["extract"]
+        if any(s.lower() in title.lower() for s in disallowed_strings):
+            return 'Error'
 
-        if body == '':
-            return "Error"
+        page = wikipedia.page(title)
 
-        for string in disallowed_strings:
-            if string.lower() in title.lower():
-                return "Error"
+        if section:
+            heading = title + ': ' + section
+            text = page.section(section)
+        else:
+            heading = title
+            text = page.summary
 
-        for string in body_disallowed_strings:
-            if string.lower() in body.lower():
-                return "Error"
+        if not text:  # page or section does not exist
+            return 'Error'
+        if any(s.lower() in text.lower() for s in body_disallowed_strings):
+            return 'Error'
+        text = text.partition('\n')[0]  # get the first paragraph
 
-
-        return [title, body]
+        return [heading, text]
     except Exception as e:
+        #  unsure if this is needed, but it should mimics old behavior better
         print(str(e))
-        return "Error"
+        return 'Error'
 
 def generate_footer():
     footer = "^[ "
