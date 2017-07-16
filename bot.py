@@ -163,51 +163,39 @@ def locateByName(e, name):
     return None
 
 
-def get_wikipedia_links(input_text):
+def get_wikipedia_articles(input_text):
     """Gets en.wikipedia.org link in input_text. If it can't be found, returns []"""
 
-    soup = BeautifulSoup(input_text, "lxml")
+    def get_article(url):
+        if url.netloc.endswith('.wikipedia.org'):
+            if url.path == '/w/index.php':
+                info = urllib.parse.parse_qs(url.query)
+                return info['title'][0], ''  # todo: avoid [0] if possible
+            elif url.path.startswith('/wiki/'):
+                return url.path[6:].replace('_', ' '), url.fragment.replace('_', ' ')
 
-    fixed_urls = []
-    urls = re.findall(r'(https?://[^\s]+)', input_text)
+        return None
 
-    for url in soup.findAll('a'):
-        try:
-            fixed_urls.append(url['href'])
-        except Exception:
-            pass
+    soup = BeautifulSoup(input_text, "html.parser")
+    urls = [urllib.parse.urlparse(a['href']) for a in soup.findAll('a')]
+    urls = map(get_article, urls)
+    urls = filter(None, urls)
 
-    done_urls = set(fixed_urls)  # removes duplicates
-
-    """Deletes urls that contain a file extension"""
-    fixed_urls = []
-    for url in done_urls:
-        for extension in media_extensions:
-            if not extension.lower() in url.lower():
-                fixed_urls.append(url)
-                break
-
-    soup.decompose()
-
-    return fixed_urls
+    return list(urls)
 
 
-def get_wiki_text(original_link):
+def get_wiki_text(article, heading):
     try:
-        parse_res = urllib.parse.urlparse(original_link)
-        title = parse_res.path[6:].replace('_', ' ')
-        section = parse_res.fragment.replace('_', ' ')
-
-        if any(s.lower() in title.lower() for s in disallowed_strings):
+        if any(s.lower() in article.lower() for s in disallowed_strings):
             return 'Error'
 
-        page = wikipedia.page(title)
+        page = wikipedia.page(article)
 
-        if section:
-            heading = title + ': ' + section
-            text = page.section(section)
+        if heading:
+            heading = article + ': ' + heading
+            text = page.section(heading)
         else:
-            heading = title
+            heading = article
             text = page.summary
 
         if not text:  # page or section does not exist
@@ -217,9 +205,8 @@ def get_wiki_text(original_link):
         text = text.partition('\n')[0]  # get the first paragraph
 
         return [heading, text]
-    except Exception as e:
-        #  unsure if this is needed, but it should mimics old behavior better
-        print(str(e))
+    except wikipedia.WikipediaException as e:
+        print(repr(e))
         return 'Error'
 
 
@@ -244,13 +231,13 @@ def generate_footer():
     return footer
 
 
-def generate_comment(input_urls):
+def generate_comment(articles):
     comment = []
     content = []
     done_comment = []
 
-    for url in input_urls:
-        url_content = get_wiki_text(url)
+    for article, heading in articles:
+        url_content = get_wiki_text(article, heading)
 
         if url_content != "Error":
             content.append(url_content)
@@ -389,37 +376,57 @@ def check_bot(input_user):
 
 
 def main():
-    monitorMessages()
+    # monitorMessages() # todo: re-enable
     for comment in reddit.subreddit('all').comments(limit=100):
-
         # Check if "wikipedia.org/wiki/" in comment. This should migate most comment.id spam
         if "wikipedia.org/wiki/" in str(comment.body).lower():
-            # Check if user is blacklisted (excluded)
-            if not check_excluded(user_blacklist_file, str(comment.author)) == True:
-                # Check if id is in cache
-                if not comment.id in get_cache(cache_file):
-                    # Check if user is in already bot list:
-                    if not str(comment.author) in get_bot_list(bot_list_file):
 
-                        # Check if user is bot
-                        # Currently not used                        
-                        if check_bot(str(comment.author)) == "+":
-                            enter_bot(bot_list_file, str(comment.author))
-                            print(str(comment.author) + " is a bot")
-                        else:
-                            urls = get_wikipedia_links(comment.body_html)
+            # todo: if user is not blacklisted (also blacklist bots)
+            # todo: if user is not in cache
 
-                            if not urls == []:
-                                comment_text = generate_comment(urls)
-                                comment_text = comment_text.replace("SUBREDDITNAMEHERE", str(comment.subreddit))
+            if comment.id not in get_cache(cache_file):
+                if not check_excluded(user_blacklist_file, str(comment.author)):
+                    input_cache(cache_file, comment.id)
 
-                                if not comment_text == "Error":
-                                    print("Replying to " + str(comment.author) + " in /r/" + str(comment.subreddit))
+                    articles = get_wikipedia_articles(comment.body_html)
 
-                                    # print(comment_text)
-                                    comment.reply(comment_text)
+                    if articles:
+                        comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(
+                            comment.subreddit))  # todo move this to footer generation
 
-                input_cache(cache_file, comment.id)
+                        if comment_text != "Error":
+                            print('Replying to ' + str(comment.author) + ' in /r/' + str(
+                                comment.subreddit) + ": " + comment.link_permalink + comment.id)
+                            print('=' * 100)
+                            print(comment_text)
+                            print('=' * 100)
+
+                            # # Check if user is blacklisted (excluded)
+                            # if not check_excluded(user_blacklist_file, str(comment.author)) == True:
+                            #     # Check if id is in cache
+                            #     if not comment.id in get_cache(cache_file):
+                            #         # Check if user is in already bot list:
+                            #         if not str(comment.author) in get_bot_list(bot_list_file):
+                            #
+                            #             # Check if user is bot
+                            #             # Currently not used
+                            #             if check_bot(str(comment.author)) == "+":
+                            #                 enter_bot(bot_list_file, str(comment.author))
+                            #                 print(str(comment.author) + " is a bot")
+                            #             else:
+                            #                 urls = get_wikipedia_links(comment.body_html)
+                            #
+                            #                 if not urls == []:
+                            #                     comment_text = generate_comment(urls)
+                            #                     comment_text = comment_text.replace("SUBREDDITNAMEHERE", str(comment.subreddit))
+                            #
+                            #                     if not comment_text == "Error":
+                            #                         print("Replying to " + str(comment.author) + " in /r/" + str(comment.subreddit))
+                            #
+                            #                         # print(comment_text)
+                            #                         # comment.reply(comment_text)
+                            #
+                            #     input_cache(cache_file, comment.id)
 
 
 if __name__ == '__main__':
@@ -432,6 +439,6 @@ if __name__ == '__main__':
         except praw.exceptions.APIException as e:
             print('ratelimit hit, sleeping 100 secs.')
             time.sleep(100)
-        except Exception as e:
-            if str(e) not in errors_to_not_print:
-                print(e)
+            # except Exception as e:
+            #     if str(e) not in errors_to_not_print:
+            #         print(e)
