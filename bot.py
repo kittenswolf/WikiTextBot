@@ -13,7 +13,7 @@ import praw.exceptions
 import prawcore
 import persistentlist as pl
 
-# Settings 
+# Settings
 
 msg_cache = pl.PersistentList('cache/msg_cache.txt')
 com_cache = pl.PersistentList('cache/com_cache.txt')
@@ -49,7 +49,6 @@ downvote_remove = "^Downvote ^to ^remove"
 
 footer_seperator = "^|"
 
-normal_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ßÄÖÜäöüàâæçèéêëîïôœùûÀÂÆÇÈÉÊËÎÏÔŒÙÛ-_#'
 disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
 body_disallowed_strings = [
     "From a modification: This is a redirect from a modification of the target's title or a closely related title. For example, the words may be rearranged, or punctuation may be different.",
@@ -58,19 +57,6 @@ body_disallowed_strings = [
 
 errors_to_not_print = ["received 403 HTTP response"]
 
-media_extensions = [".png", ".jpeg", ".jpg", ".bmp", ".svg", ".mp4", ".webm", "gif", ".gifv", ".flv", ".wmv", ".amv"]
-image_extensions = [".png", ".jpeg", ".jpg", ".bmp", ".gif"]
-
-intro_wikipedia_link = wikipedia_link = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&explaintext=&exintro=&exsentences=NUMHERE__1&titles="
-category_wikipedia_link = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&rvprop=content&rvsection=SECTIONHERE__1&titles="
-
-if __name__ == '__main__':
-    print("Logging in..")
-    reddit = praw.Reddit(user_agent='*',
-                         client_id="*", client_secret="*",
-                         username=bot_username, password="*")
-    print("Logged in.")
-
 
 def unique(seq):
     seen = set()
@@ -78,41 +64,6 @@ def unique(seq):
         if value not in seen:
             seen.add(value)
             yield value
-
-
-def get_thumbnail(input_id):
-    # Currently not used
-    page = wikipedia.page(pageid=input_id)
-    images = page.images
-
-    page_title = page.title
-
-    max_extension_len = max(map(len, image_extensions))
-
-    good_images = []
-    for url in images:
-        for extension in image_extensions:
-            end_part = str(url.lower())[-max_extension_len:]
-            if extension.lower() in end_part:
-                good_images.append(url)
-
-    split_word = page_title.split("_")
-
-    thumbnail_images = []
-    if not good_images == []:
-        for url in good_images:
-            for word in split_word:
-                if word.lower() in url.lower():
-                    thumbnail_images.append(url)
-
-        if thumbnail_images:
-            thumbnail = random.choice(thumbnail_images)
-        else:
-            thumbnail = random.choice(images)
-    else:
-        thumbnail = random.choice(images)
-
-    return thumbnail
 
 
 def replace_right(source, target, replacement, replacements=None):
@@ -154,16 +105,16 @@ def get_wikipedia_articles(input_text):
     return articles
 
 
-def get_wiki_text(article, heading):
+def get_wiki_text(article, section):
     try:
         if any(s.lower() in article.lower() for s in disallowed_strings):
             return 'Error'
 
         page = wikipedia.page(article)
 
-        if heading:
-            heading = article + ': ' + heading
-            text = page.section(heading)
+        if section:
+            heading = article + ': ' + section
+            text = page.section(section)
         else:
             heading = article
             text = page.summary
@@ -233,82 +184,84 @@ def generate_comment(articles):
     return comment
 
 
-def monitorMessages():
-    """Montors the newest 100 messages and excludes/includes users requesting it."""
+if __name__ == '__main__':
+    print("Logging in..")
+    reddit = praw.Reddit(user_agent='*',
+                         client_id="*", client_secret="*",
+                         username=bot_username, password="*")
+    print("Logged in.")
 
-    for message in reddit.inbox.messages(limit=100):
-        if message.id not in msg_cache:
-            author = str(message.author)
 
-            if author != bot_username:
-
-                if exclude[0].replace(" ", "").lower() == message.subject.lower():
-                    if author in user_blacklist:
-                        message.reply(user_already_excluded)
-                    else:
-                        print("Excluding the user '" + author + "'")
-                        user_blacklist.append(author)
-                        message.reply(user_exclude_done)
-
-                if include.lower() == message.subject.lower():
-                    if author in user_blacklist:
-                        print("Including the user '" + author + "'")
-                        user_blacklist.remove(author)
-                        message.reply(user_include_done)
-                    else:
-                        message.reply(user_not_excluded)
+    def monitor_messages():
+        for message in reddit.inbox.messages(limit=100):
+            if message.id in msg_cache:
+                continue
 
             msg_cache.append(message.id)
 
-def main():
-    if not reddit.read_only:
-        monitorMessages()
-    for comment in reddit.subreddit('all').comments(limit=100):
+            author = str(message.author)
 
-        if 'wikipedia.org/wiki/' not in str(comment.body).lower():
-            continue
+            if author == bot_username:
+                continue
 
-        if comment.id in com_cache:
-            continue
+            if exclude[0].replace(" ", "").lower() == message.subject.lower():
+                if author in user_blacklist:
+                    message.reply(user_already_excluded)
+                else:
+                    print("Excluding the user '" + author + "'")
+                    user_blacklist.append(author)
+                    message.reply(user_exclude_done)
 
-        com_cache.append(comment.id)
-
-        if comment.author in user_blacklist or comment.author in bot_blacklist:
-            continue
-
-        articles = get_wikipedia_articles(comment.body_html)
-
-        if not articles:
-            continue
-
-        # todo move this to footer generation
-        comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(comment.subreddit))
-
-        if comment_text == "Error":
-            continue
-
-        print('Replying to ' + str(comment.author) + ' in /r/' + str(
-            comment.subreddit) + ": " + comment.link_permalink + comment.id)
-        print('=' * 100)
-        print(comment_text)
-        print('=' * 100)
-
-        comment.reply(comment_text)
+            if include.lower() == message.subject.lower():
+                if author in user_blacklist:
+                    print("Including the user '" + author + "'")
+                    user_blacklist.remove(author)
+                    message.reply(user_include_done)
+                else:
+                    message.reply(user_not_excluded)
 
 
-if __name__ == '__main__':
-    # bd.settings(reddit, debug_in=bd_debug)
-    # Currently not used
+    def monitor_comments():
+        for comment in reddit.subreddit('all').comments(limit=100):
+            if comment.id in com_cache:
+                continue
+
+            com_cache.append(comment.id)
+
+            if 'wikipedia.org/wiki/' not in str(comment.body).lower():
+                continue
+
+            if comment.author in user_blacklist or comment.author in bot_blacklist:
+                continue
+
+            articles = get_wikipedia_articles(comment.body_html)
+
+            if not articles:
+                continue
+
+            # todo move this to footer generation
+            comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(comment.subreddit))
+
+            if comment_text == "Error":
+                continue
+
+            print('Replying to ' + str(comment.author) + ' in /r/' + str(
+                comment.subreddit) + ": " + comment.link_permalink + comment.id)
+            print('=' * 100)
+            print(comment_text)
+            print('=' * 100)
+
+            comment.reply(comment_text)
+
+
     while True:
         try:
-            main()
-            time.sleep(0.5)
+            monitor_messages()
+            monitor_comments()
+            time.sleep(.5)
         except praw.exceptions.APIException as e:
             print('ratelimit hit, sleeping 100 secs.')
             time.sleep(100)
-        except prawcore.ResponseException as e:
-            print(e)
-            # except Exception as e:
-            #     if str(e) not in errors_to_not_print:
-            #         print(e)
-            #         print(type(e))
+        except Exception as e:
+            # catch-all to keep bot from shutting down.
+            print(repr(e))
