@@ -10,6 +10,8 @@ import praw.exceptions
 import wikipedia
 from bs4 import BeautifulSoup
 
+import resources
+
 import persistentlist as pl
 
 # Settings
@@ -27,38 +29,8 @@ login_info = {
     'password': '*'
 }
 
-exclude_user_text = 'Exclude Me'
-exclude_sub_text = 'Exclude From Subreddit'
-include_user_text = 'Include Me'
-
-exclude_user_flag = exclude_user_text.lower().replace(' ', '')
-include_user_flag = include_user_text.lower().replace(' ', '')
-
-user_already_excluded = "You already seem to be excluded from the bot.\n\nTo be included again, message me '" + include_user_text + "'.\n\nHave a nice day!"
-user_exclude_done = "Done! If you want to be included again, message me '" + include_user_text + "'.\n\nHave a nice day!"
-user_include_done = "Done!\n\nHave a nice day!"
-user_not_excluded = "It seems you are not excluded from the bot. If you think this is false, [message](https://www.reddit.com/message/compose?to=kittens_from_space) me.\n\nHave a nice day!"
-
-footer_links = [
-    ["PM", "https://www.reddit.com/message/compose?to=kittens_from_space"],
-    [exclude_user_text,
-     "https://reddit.com/message/compose?to=WikiTextBot&message=" + exclude_user_flag + "&subject=" + exclude_user_flag],
-    [exclude_sub_text, "https://np.reddit.com/r/SUBREDDITNAMEHERE/about/banned"],
-    ["FAQ / Information", "https://np.reddit.com/r/WikiTextBot/wiki/index"],
-    ["Source", "https://github.com/kittenswolf/WikiTextBot"]
-]
-
-downvote_remove = "^Downvote ^to ^remove"
-
-footer_seperator = "^|"
-
-disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
-body_disallowed_strings = [
-    "From a modification: This is a redirect from a modification of the target's title or a closely related title. For example, the words may be rearranged, or punctuation may be different.",
-    "From a miscapitalisation: This is a redirect from a miscapitalisation. The correct form is given by the target of the redirect.",
-    "{\displaystyle"]
-
 errors_to_not_print = ["received 403 HTTP response"]
+errors_to_quit = ["received 401 HTTP response"]
 
 
 def unique(seq):
@@ -69,25 +41,7 @@ def unique(seq):
             yield value
 
 
-def replace_right(source, target, replacement, replacements=None):
-    return replacement.join(source.rsplit(target, replacements))
-
-
-def locateByName(e, name):
-    if e.get('name', None) == name:
-        return e
-
-    for child in e.get('children', []):
-        result = locateByName(child, name)
-        if result is not None:
-            return result
-
-    return None
-
-
 def get_wikipedia_articles(input_text):
-    """Gets en.wikipedia.org link in input_text. If it can't be found, returns []"""
-
     def get_article(url):
         if url.netloc.endswith('.wikipedia.org'):
             if url.path == '/w/index.php':
@@ -110,7 +64,7 @@ def get_wikipedia_articles(input_text):
 
 def get_wiki_text(article, section):
     try:
-        if any(s.lower() in article.lower() for s in disallowed_strings):
+        if any(s.lower() in article.lower() for s in resources.disallowed_strings):
             return 'Error'
 
         page = wikipedia.page(article)
@@ -124,7 +78,7 @@ def get_wiki_text(article, section):
 
         if not text:  # page or section does not exist
             return 'Error'
-        if any(s.lower() in text.lower() for s in body_disallowed_strings):
+        if any(s.lower() in text.lower() for s in resources.body_disallowed_strings):
             return 'Error'
         text = text.partition('\n')[0]  # get the first paragraph
 
@@ -134,28 +88,7 @@ def get_wiki_text(article, section):
         return 'Error'
 
 
-def generate_footer():
-    footer = "^[ "
-
-    links = []
-    for link in footer_links:
-        final_desc = "^" + link[0].replace(" ", " ^")
-        final_link = "[" + final_desc + "](" + link[1] + ")"
-        links.append(final_link)
-
-    for link in links:
-        footer += link
-        footer += " " + footer_seperator + " "
-
-    footer += " ^]"
-    footer = replace_right(footer, footer_seperator, "", 1)
-
-    footer += "\n" + downvote_remove + " ^| ^v0.24"
-
-    return footer
-
-
-def generate_comment(articles):
+def generate_comment(articles, subreddit):
     comment = []
     content = []
     done_comment = []
@@ -181,7 +114,7 @@ def generate_comment(articles):
     for line in comment:
         done_comment.append(line + "\n")
 
-    done_comment.append(generate_footer())
+    done_comment.append(resources.generate_footer(subreddit))
     comment = ''.join(done_comment)
 
     return comment
@@ -207,30 +140,30 @@ def main():
             message_content = message.subject + message.body
             message_content = message_content.lower().replace(' ', '')
 
-            if exclude_user_flag in message_content:
+            if resources.exclude_user_flag in message_content:
                 if author in user_blacklist:
-                    message.reply(user_already_excluded)
+                    message.reply(resources.user_already_excluded)
                 else:
                     print("Excluding the user '" + author + "'")
                     user_blacklist.append(author)
-                    message.reply(user_exclude_done)
+                    message.reply(resources.user_exclude_done)
 
-            if include_user_flag in message_content:
+            if resources.include_user_flag in message_content:
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
-                    message.reply(user_include_done)
+                    message.reply(resources.user_include_done)
                 else:
-                    message.reply(user_not_excluded)
+                    message.reply(resources.user_not_excluded)
 
     def monitor_comments():
-        for comment in reddit.subreddit('all').comments(limit=100):
+        for comment in reddit.subreddit("all").comments(limit=100):
             if comment.id in com_cache:
                 continue
 
             com_cache.append(comment.id)
 
-            if 'wikipedia.org/wiki/' not in str(comment.body).lower():
+            if "wikipedia.org/wiki/" not in str(comment.body).lower():
                 continue
 
             if comment.author in user_blacklist or comment.author in bot_blacklist:
@@ -242,17 +175,16 @@ def main():
                 continue
 
             # todo move this to footer generation
-            comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE",
-                                                              str(comment.subreddit))
+            comment_text = generate_comment(articles, str(comment.subreddit))
 
             if comment_text == "Error":
                 continue
 
-            print('Replying to ' + str(comment.author) + ' in /r/' + str(
+            print("Replying to " + str(comment.author) + " in /r/" + str(
                 comment.subreddit) + ": " + comment.link_permalink + comment.id)
-            print('=' * 100)
+            print("=" * 100)
             print(comment_text)
-            print('=' * 100)
+            print("=" * 100)
 
             comment.reply(comment_text)
 
@@ -262,12 +194,14 @@ def main():
             monitor_comments()
             time.sleep(.5)
         except praw.exceptions.APIException as e:
-            print('ratelimit hit, sleeping 100 secs.')
+            print("rate limit hit, sleeping 100 secs.")
             time.sleep(100)
         except Exception as e:
             # catch-all to keep bot from shutting down.
             if str(e) not in errors_to_not_print:
                 print(repr(e))
+            if str(e) in errors_to_quit:
+                return
 
 
 if __name__ == '__main__':
