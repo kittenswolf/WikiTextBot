@@ -57,7 +57,7 @@ def get_wikipedia_articles(input_text):
         if url.netloc.endswith('.wikipedia.org'):
             if url.path == '/w/index.php':
                 info = urllib.parse.parse_qs(url.query)
-                return info['title'][0], ''  # todo: avoid [0] if possible
+                return info['title'][0], url.fragment.replace('_', ' ')
             elif url.path.startswith('/wiki/'):
                 return url.path[6:].replace('_', ' '), url.fragment.replace('_', ' ')
 
