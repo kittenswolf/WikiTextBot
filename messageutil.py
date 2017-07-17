@@ -1,8 +1,14 @@
 import re
 import urllib.parse
 
-# %value indicates url-quoted version of normal value
-# if exclude_user is 'Exclude me' then %exclude_user is 'Exclude%20me'
+"""
+Provides utilities for managing message strings and responding to reddit messages.
+Includes in-code formatting features.
+"""
+
+__author__ = "github.com/allemangD"
+__status__ = "Development"
+
 messages = {
     'exclude_user': 'Exclude Me',
     'exclude_sub': 'Exclude From Subreddit',
@@ -24,13 +30,51 @@ messages = {
                             "this is false, [message]({pm_link}) me.\n\n"
                             "Have a nice day!"
 }
+"""The contents of messages are accessed with get_message(message_id). To include 
+message A in the text of message B, include message B's ID in curly braces: 
+
+    'salutation': 'Hello',
+    'target': 'World',
+    'greeting': '{salutation}, {target}'
+    
+In the above example, get_message('greeting') would return 'Hello, World!'
+
+Messages are also formatted recursively to a maximum depth, by default 3. This means 
+that messages can easily be composed from each other: 
+
+    'link': 'https://google.com/',
+    'title': 'Google',
+    'search_engine': '[{title}]({link})',
+    'text': 'I prefer {search_engine}.'
+
+"""
 
 intents = [
     'exclude_user', 'include_user'
 ]
+"""Certain messages can be marked as message intents to be acted on by the bot. A 
+message's intent is retrieved with get_intent(message) which performs a naive fuzzy 
+search on the contents of the message. The message is compared with the message 
+associated with each message id in the intents list. 
 
-# todo proper documentation of how value formatting works
-# get_footer also gives the 'subreddit' key for the current subreddit
+For example:
+
+if the contents of messages are:
+
+    'respond': 'Please respond',
+    'ignore': 'Ignore me',
+    
+and the contents of intent are:
+
+    'ignore', 'respond'
+    
+Then any message containing some variation on the phrase "please respond" will give the 
+intent 'respond', while any message containing the phrase 'ignore me' will give the 
+intent 'ignore'. If a message contains both, then the first intent in the list will be 
+given, in this case 'ignore' 
+
+"""
+
 footer_items = [
     ('PM', '{pm_link}'),
     ('{exclude_user}', '{exclude_link}'),
@@ -40,19 +84,34 @@ footer_items = [
     'Downvote to remove',
     'v0.24'
 ]
+"""The footer text is retrieved with get_footer(subreddit). The footer is built of a 
+list of strings and 2-tuples of strings. Strings are treated as normal messages, 
+which means that all {id} formatting is applied, with the addition of the 'subreddit' 
+message, which is received as a parameter to get_footer. 
+ 
+Tuples are converted to markdown links. The first element of a tuple is the text for 
+the link, while the second is the URL. The entire footer is also converted to 
+superscript. 
 
-disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
-body_disallowed_strings = [
-    "From a modification: This is a redirect from a modification of the target's title "
-    "or a closely related title. For example, the words may be rearranged, or "
-    "punctuation may be different.",
-    "From a miscapitalisation: This is a redirect from a miscapitalisation. The correct "
-    "form is given by the target of the redirect.",
-    "{\displaystyle"
-]
+The contents of lists are surrounded by brackets [ ] and delimited by pipes | .
+
+As an example, the footer:
+
+    'footer',
+    ('google', 'https://google.com/'),
+    '/r/{subreddit}'
+    'end footer'
+    
+Results in the markdown:
+
+    '^[ ^footer ^| [^google](https://google.com/) ^| ^/r/CurrentSub ^| ^end ^footer ^]
+
+"""
 
 
 def expand_format(fmt_str, keys=None, max_depth=3):
+    """Recursively formats the string until the format operation does nothing or
+    max_depth is reached """
     if not keys:
         keys = messages
 
@@ -68,6 +127,7 @@ def expand_format(fmt_str, keys=None, max_depth=3):
 
 
 def get_footer(subreddit):
+    """Gets the formatted footer as specified by footer_items"""
     values = {'subreddit': subreddit}
     values.update(messages)
 
@@ -87,13 +147,17 @@ def get_footer(subreddit):
 
 
 def get_message(message_id):
+    """Gets the associated message as specified in messages"""
     return expand_format(messages.get(message_id, ''))
 
 
 def get_intent(message):
+    """Gets the relevant intent, a member of intents, or None if no intent is found.
+    Uses a very naive fuzzy search, which is case, punctuation, and space insensitive. """
     content = message.subject + message.body
     letters = re.sub('\W', '', content).lower()
     for intent in intents:
         flag = re.sub('\W', '', get_message(intent)).lower()
         if flag in letters:
             return intent
+    return None

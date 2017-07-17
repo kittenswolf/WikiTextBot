@@ -32,6 +32,16 @@ login_info = {
 errors_to_not_print = ["received 403 HTTP response"]
 errors_to_quit = ["received 401 HTTP response"]
 
+disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
+body_disallowed_strings = [
+    "From a modification: This is a redirect from a modification of the target's title "
+    "or a closely related title. For example, the words may be rearranged, or "
+    "punctuation may be different.",
+    "From a miscapitalisation: This is a redirect from a miscapitalisation. The correct "
+    "form is given by the target of the redirect.",
+    "{\displaystyle"
+]
+
 
 def unique(seq):
     seen = set()
@@ -64,7 +74,7 @@ def get_wikipedia_articles(input_text):
 
 def get_wiki_text(article, section):
     try:
-        if any(s.lower() in article.lower() for s in mu.disallowed_strings):
+        if any(s.lower() in article.lower() for s in disallowed_strings):
             return 'Error'
 
         page = wikipedia.page(article)
@@ -78,7 +88,7 @@ def get_wiki_text(article, section):
 
         if not text:  # page or section does not exist
             return 'Error'
-        if any(s.lower() in text.lower() for s in mu.body_disallowed_strings):
+        if any(s.lower() in text.lower() for s in body_disallowed_strings):
             return 'Error'
         text = text.partition('\n')[0]  # get the first paragraph
 
