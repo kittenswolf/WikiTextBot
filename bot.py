@@ -11,8 +11,9 @@ import wikipedia
 from bs4 import BeautifulSoup
 
 import messageutil as mu
-
 import persistentlist as pl
+
+from collections import ChainMap
 
 # Settings
 
@@ -22,7 +23,7 @@ user_blacklist = pl.PersistentList('user_blacklist.txt', mapf=str.lower)  # igno
 bot_blacklist = pl.PersistentList('bot_blacklist.txt', mapf=str.lower)
 
 login_info = {
-    'user_agent': '*',
+    'user_agent': 'PRAW bot for /u/WikiTextBot',
     'client_id': '*',
     'client_secret': '*',
     'username': 'WikiTextBot',
@@ -131,9 +132,26 @@ def generate_comment(articles, subreddit):
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', dest='client_id')
+    parser.add_argument('-s', dest='client_secret')
+    parser.add_argument('-u', dest='username')
+    parser.add_argument('-p', dest='password')
+    parser.add_argument('--readonly', dest='readonly', nargs='?', type=bool, const=True,
+                        default=False)
+
+    args = parser.parse_args()
+
+    read_only = args.readonly
+
+    args = {k: v for k, v in vars(args).items() if v}
+    cm = ChainMap(args, login_info)
+
     print("Logging in..")
-    reddit = praw.Reddit(**login_info)
-    print("Logged in.")
+    reddit = praw.Reddit(**cm)
+    print('logged in to %s.' % reddit.user.me().name)
 
     def monitor_messages():
         for message in reddit.inbox.messages(limit=100):
@@ -155,14 +173,17 @@ def main():
                 else:
                     print("Excluding the user '" + author + "'")
                     user_blacklist.append(author)
-                    message.reply(mu.get_message('user_exclude_success'))
+                    if not read_only:
+                        message.reply(mu.get_message('user_exclude_success'))
             elif intent == 'include_user':
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
-                    message.reply(mu.get_message('user_include_success'))
+                    if not read_only:
+                        message.reply(mu.get_message('user_include_success'))
                 else:
-                    message.reply(mu.get_message('user_include_failure'))
+                    if not read_only:
+                        message.reply(mu.get_message('user_include_failure'))
 
     def monitor_comments():
         for comment in reddit.subreddit("all").comments(limit=100):
@@ -182,19 +203,24 @@ def main():
             if not articles:
                 continue
 
-            # todo move this to footer generation
             comment_text = generate_comment(articles, str(comment.subreddit))
 
             if comment_text == "Error":
                 continue
 
-            print("Replying to " + str(comment.author) + " in /r/" + str(
-                comment.subreddit) + ": " + comment.link_permalink + comment.id)
+            word = 'Generated reply' if read_only else 'Replying'
+            print('%s to %s in /r/%s %s', (
+                word,
+                comment.author,
+                comment.subreddit,
+                comment.link_permalink + comment.id))
+
             print("=" * 100)
             print(comment_text)
             print("=" * 100)
 
-            comment.reply(comment_text)
+            if not read_only:
+                comment.reply(comment_text)
 
     while True:
         try:
