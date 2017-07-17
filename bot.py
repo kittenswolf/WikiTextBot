@@ -10,7 +10,7 @@ import praw.exceptions
 import wikipedia
 from bs4 import BeautifulSoup
 
-import resources
+import messageutil as mu
 
 import persistentlist as pl
 
@@ -64,7 +64,7 @@ def get_wikipedia_articles(input_text):
 
 def get_wiki_text(article, section):
     try:
-        if any(s.lower() in article.lower() for s in resources.disallowed_strings):
+        if any(s.lower() in article.lower() for s in mu.disallowed_strings):
             return 'Error'
 
         page = wikipedia.page(article)
@@ -78,7 +78,7 @@ def get_wiki_text(article, section):
 
         if not text:  # page or section does not exist
             return 'Error'
-        if any(s.lower() in text.lower() for s in resources.body_disallowed_strings):
+        if any(s.lower() in text.lower() for s in mu.body_disallowed_strings):
             return 'Error'
         text = text.partition('\n')[0]  # get the first paragraph
 
@@ -114,7 +114,7 @@ def generate_comment(articles, subreddit):
     for line in comment:
         done_comment.append(line + "\n")
 
-    done_comment.append(resources.generate_footer(subreddit))
+    done_comment.append(mu.get_footer(subreddit))
     comment = ''.join(done_comment)
 
     return comment
@@ -140,21 +140,21 @@ def main():
             message_content = message.subject + message.body
             message_content = message_content.lower().replace(' ', '')
 
-            if resources.exclude_user_flag in message_content:
+            if mu.exclude_user_flag in message_content:
                 if author in user_blacklist:
-                    message.reply(resources.user_already_excluded)
+                    message.reply(mu.get_message('user_exclude_failed'))
                 else:
                     print("Excluding the user '" + author + "'")
                     user_blacklist.append(author)
-                    message.reply(resources.user_exclude_done)
+                    message.reply(mu.get_message('user_exclude_success'))
 
-            if resources.include_user_flag in message_content:
+            if mu.include_user_flag in message_content:
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
-                    message.reply(resources.user_include_done)
+                    message.reply(mu.get_message('user_include_success'))
                 else:
-                    message.reply(resources.user_not_excluded)
+                    message.reply(mu.get_message('user_include_failure'))
 
     def monitor_comments():
         for comment in reddit.subreddit("all").comments(limit=100):
