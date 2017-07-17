@@ -2,45 +2,48 @@
 # Bot in action: reddit.com/u/WikiTextBot
 # reddit.com/u/kittens_from_space
 
-from bs4 import BeautifulSoup
-import urllib.request
-import urllib.parse
-import wikipedia
-import random
 import time
-import praw
+import urllib.parse
+import urllib.request
+
 import praw.exceptions
-import prawcore
+import wikipedia
+from bs4 import BeautifulSoup
+
 import persistentlist as pl
 
 # Settings
 
 msg_cache = pl.PersistentList('cache/msg_cache.txt')
 com_cache = pl.PersistentList('cache/com_cache.txt')
-user_blacklist = pl.PersistentList('user_blacklist.txt', mapf=str.lower)  # case insensitive comparisons
+user_blacklist = pl.PersistentList('user_blacklist.txt', mapf=str.lower)  # ignore case
 bot_blacklist = pl.PersistentList('bot_blacklist.txt', mapf=str.lower)
 
-# bd_debug = False
+login_info = {
+    'user_agent': '*',
+    'client_id': '*',
+    'client_secret': '*',
+    'username': 'WikiTextBot',
+    'password': '*'
+}
 
-comment_threshold = 500
-num_sentences = 4
+exclude_user_text = 'Exclude Me'
+exclude_sub_text = 'Exclude From Subreddit'
+include_user_text = 'Include Me'
 
-bot_username = "WikiTextBot"
+exclude_user_flag = exclude_user_text.lower().replace(' ', '')
+include_user_flag = include_user_text.lower().replace(' ', '')
 
-exclude = ["Exclude me", "Exclude from subreddit"]
-include = "IncludeMe"
-
-user_already_excluded = "You already seem to be excluded from the bot.\n\nTo be included again, message me '" + include + "'.\n\nHave a nice day!"
-user_exclude_done = "Done! If you want to be included again, message me '" + include + "'.\n\nHave a nice day!"
+user_already_excluded = "You already seem to be excluded from the bot.\n\nTo be included again, message me '" + include_user_text + "'.\n\nHave a nice day!"
+user_exclude_done = "Done! If you want to be included again, message me '" + include_user_text + "'.\n\nHave a nice day!"
 user_include_done = "Done!\n\nHave a nice day!"
 user_not_excluded = "It seems you are not excluded from the bot. If you think this is false, [message](https://www.reddit.com/message/compose?to=kittens_from_space) me.\n\nHave a nice day!"
 
 footer_links = [
     ["PM", "https://www.reddit.com/message/compose?to=kittens_from_space"],
-    [exclude[0],
-     "https://reddit.com/message/compose?to=WikiTextBot&message=" + exclude[0].replace(" ", "") + "&subject=" + exclude[
-         0].replace(" ", "")],
-    [exclude[1], "https://np.reddit.com/r/SUBREDDITNAMEHERE/about/banned"],
+    [exclude_user_text,
+     "https://reddit.com/message/compose?to=WikiTextBot&message=" + exclude_user_flag + "&subject=" + exclude_user_flag],
+    [exclude_sub_text, "https://np.reddit.com/r/SUBREDDITNAMEHERE/about/banned"],
     ["FAQ / Information", "https://np.reddit.com/r/WikiTextBot/wiki/index"],
     ["Source", "https://github.com/kittenswolf/WikiTextBot"]
 ]
@@ -184,13 +187,10 @@ def generate_comment(articles):
     return comment
 
 
-if __name__ == '__main__':
+def main():
     print("Logging in..")
-    reddit = praw.Reddit(user_agent='*',
-                         client_id="*", client_secret="*",
-                         username=bot_username, password="*")
+    reddit = praw.Reddit(**login_info)
     print("Logged in.")
-
 
     def monitor_messages():
         for message in reddit.inbox.messages(limit=100):
@@ -201,10 +201,13 @@ if __name__ == '__main__':
 
             author = str(message.author)
 
-            if author == bot_username:
+            if author == login_info['username']:
                 continue
 
-            if exclude[0].replace(" ", "").lower() == message.subject.lower():
+            message_content = message.subject + message.body
+            message_content = message_content.lower().replace(' ', '')
+
+            if exclude_user_flag in message_content:
                 if author in user_blacklist:
                     message.reply(user_already_excluded)
                 else:
@@ -212,14 +215,13 @@ if __name__ == '__main__':
                     user_blacklist.append(author)
                     message.reply(user_exclude_done)
 
-            if include.lower() == message.subject.lower():
+            if include_user_flag in message_content:
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
                     message.reply(user_include_done)
                 else:
                     message.reply(user_not_excluded)
-
 
     def monitor_comments():
         for comment in reddit.subreddit('all').comments(limit=100):
@@ -240,7 +242,8 @@ if __name__ == '__main__':
                 continue
 
             # todo move this to footer generation
-            comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE", str(comment.subreddit))
+            comment_text = generate_comment(articles).replace("SUBREDDITNAMEHERE",
+                                                              str(comment.subreddit))
 
             if comment_text == "Error":
                 continue
@@ -253,7 +256,6 @@ if __name__ == '__main__':
 
             comment.reply(comment_text)
 
-
     while True:
         try:
             monitor_messages()
@@ -264,4 +266,9 @@ if __name__ == '__main__':
             time.sleep(100)
         except Exception as e:
             # catch-all to keep bot from shutting down.
-            print(repr(e))
+            if str(e) not in errors_to_not_print:
+                print(repr(e))
+
+
+if __name__ == '__main__':
+    main()
