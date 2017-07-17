@@ -2,6 +2,7 @@
 # Bot in action: reddit.com/u/WikiTextBot
 # reddit.com/u/kittens_from_space
 
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -9,6 +10,7 @@ import urllib.request
 import praw.exceptions
 import wikipedia
 from bs4 import BeautifulSoup
+import bs4
 
 import messageutil as mu
 import persistentlist as pl
@@ -95,7 +97,7 @@ def get_wiki_text(article, section):
 
         return [heading, text]
     except wikipedia.WikipediaException as e:
-        print(repr(e))
+        print(repr(e), file=sys.stderr)
         return 'Error'
 
 
@@ -152,6 +154,20 @@ def main():
     print("Logging in..")
     reddit = praw.Reddit(**cm)
     print('logged in to %s.' % reddit.user.me().name)
+    if read_only:
+        print('in read-only mode (bot will not submit replies)')
+
+    def reply(message, content, url=None):
+        if url:
+            print('generated reply to %s at %s :' % (message.author, url))
+        else:
+            print('generated reply to %s:' % message.author)
+        print(repr(content))
+        if not read_only:
+            print('replying...')
+            message.reply(content)
+            print('done.')
+        print('\n\n')
 
     def monitor_messages():
         for message in reddit.inbox.messages(limit=100):
@@ -179,11 +195,9 @@ def main():
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
-                    if not read_only:
-                        message.reply(mu.get_message('user_include_success'))
+                    reply(message, mu.get_message('user_include_success'))
                 else:
-                    if not read_only:
-                        message.reply(mu.get_message('user_include_failure'))
+                    reply(message, mu.get_message('user_include_failure'))
 
     def monitor_comments():
         for comment in reddit.subreddit("all").comments(limit=100):
@@ -208,32 +222,22 @@ def main():
             if comment_text == "Error":
                 continue
 
-            word = 'Generated reply' if read_only else 'Replying'
-            print('%s to %s in /r/%s %s', (
-                word,
-                comment.author,
-                comment.subreddit,
-                comment.link_permalink + comment.id))
-
-            print("=" * 100)
-            print(comment_text)
-            print("=" * 100)
-
-            if not read_only:
-                comment.reply(comment_text)
+            reply(comment, comment_text, url=comment.link_permalink + comment.id)
 
     while True:
         try:
             monitor_messages()
             monitor_comments()
             time.sleep(.5)
+        except UserWarning as w:
+            print(w.args)
         except praw.exceptions.APIException as e:
-            print("rate limit hit, sleeping 100 secs.")
+            print("rate limit hit, sleeping 100 secs.", file=sys.stderr)
             time.sleep(100)
         except Exception as e:
             # catch-all to keep bot from shutting down.
             if str(e) not in errors_to_not_print:
-                print(repr(e))
+                print(repr(e), file=sys.stderr)
             if str(e) in errors_to_quit:
                 return
 
