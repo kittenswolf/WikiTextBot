@@ -1,13 +1,6 @@
 import re
 import urllib.parse
 
-exclude_user_text = 'Exclude Me'
-exclude_sub_text = 'Exclude From Subreddit'
-include_user_text = 'Include Me'
-
-exclude_user_flag = exclude_user_text.lower().replace(' ', '')
-include_user_flag = include_user_text.lower().replace(' ', '')
-
 # %value indicates url-quoted version of normal value
 # if exclude_user is 'Exclude me' then %exclude_user is 'Exclude%20me'
 messages = {
@@ -31,6 +24,10 @@ messages = {
                             "this is false, [message]({pm_link}) me.\n\n"
                             "Have a nice day!"
 }
+
+intents = [
+    'exclude_user', 'include_user'
+]
 
 # todo proper documentation of how value formatting works
 # get_footer also gives the 'subreddit' key for the current subreddit
@@ -91,3 +88,12 @@ def get_footer(subreddit):
 
 def get_message(message_id):
     return expand_format(messages.get(message_id, ''))
+
+
+def get_intent(message):
+    content = message.subject + message.body
+    letters = re.sub('\W', '', content).lower()
+    for intent in intents:
+        flag = re.sub('\W', '', get_message(intent)).lower()
+        if flag in letters:
+            return intent

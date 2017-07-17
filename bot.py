@@ -137,18 +137,16 @@ def main():
             if author == login_info['username']:
                 continue
 
-            message_content = message.subject + message.body
-            message_content = message_content.lower().replace(' ', '')
+            intent = mu.get_intent(message)
 
-            if mu.exclude_user_flag in message_content:
+            if intent == 'exclude_user':
                 if author in user_blacklist:
                     message.reply(mu.get_message('user_exclude_failed'))
                 else:
                     print("Excluding the user '" + author + "'")
                     user_blacklist.append(author)
                     message.reply(mu.get_message('user_exclude_success'))
-
-            if mu.include_user_flag in message_content:
+            elif intent == 'include_user':
                 if author in user_blacklist:
                     print("Including the user '" + author + "'")
                     user_blacklist.remove(author)
