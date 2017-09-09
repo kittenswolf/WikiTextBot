@@ -6,6 +6,7 @@
 from bs4 import BeautifulSoup
 import urllib.request
 import subprocess
+import functools
 import wikipedia
 import sentences
 import traceback
@@ -186,14 +187,19 @@ def get_wikipedia_links(input_text):
             if not extension.lower() in url.lower():
                 fixed_urls.append(url)
                 break
+           
+    done_urls = []
+    for url in fixed_urls:
+        if "wikipedia.org/wiki/" in url:
+            done_urls.append(url)
                 
     soup.decompose()
 
-    return fixed_urls
+    return done_urls
 
 def get_wiki_text(original_link):
     wiki_subject = original_link.split("/wiki/")[1]
-    
+
     anchor = False
     if "#" in wiki_subject:
         try:
@@ -212,6 +218,7 @@ def get_wiki_text(original_link):
             wanted_anchor = wiki_subject.split("#")[1].replace("_", " ")
             pure_subject = wiki_subject.split("#")[0]
             
+            wikipedia.set_lang(org_language)
             page = wikipedia.page(pageid=page_id)
             anchor_text = page.section(wanted_anchor)
             
@@ -270,7 +277,8 @@ def get_wiki_text(original_link):
     except Exception as e:
         print(str(e))
         return "Error"
-        
+       
+@functools.lru_cache(maxsize=10)       
 def generate_footer():
     footer = "^[ "
 
@@ -287,11 +295,11 @@ def generate_footer():
     footer += " ^]"
     footer = replace_right(footer, footer_seperator, "", 1)
     
-    footer += "\n" + downvote_remove + " ^| ^v0.24"
+    footer += "\n" + downvote_remove + " ^| ^v0.27"
 
     return footer
 
-def generate_comment(input_urls):
+def generate_comment(input_urls, comment_text=None):
     comment      = []
     content      = []
     done_comment = []
@@ -301,7 +309,9 @@ def generate_comment(input_urls):
         
         if not url_content == "Error":
             content.append(url_content)
-    
+            
+        if url_content[1].split(".")[0] in comment_text:
+            return "Error"
 
     for chunk in content:
         title = chunk[0]
@@ -345,7 +355,7 @@ def excludeUser(file, input_user):
         print(file + " doesnt exist?")
         return
         
-    current_excluded = [user.lower() for user in raw_file.split("\n")]
+    current_excluded = [user.lower() for user in raw_file.split("\n") if not user.replace(" ", "") == ""]
     current_excluded.append(input_user)
     
     with open(file, "w") as f:
@@ -437,7 +447,6 @@ def get_bot_list(file):
 
 def check_bot(input_user):
     # Currently not used
-    return "-"
 
     # score = bd.calc_bot_score(input_user)
     
@@ -446,13 +455,15 @@ def check_bot(input_user):
         # return verdict
     # else:
         # return "-"
+        
+    return "-"
 
 def main():
     monitorMessages()
     for comment in reddit.subreddit('all').comments(limit=100):
     
         #Check if "wikipedia.org/wiki/" in comment. This should migate most comment.id spam
-        if "wikipedia.org/wiki/" in str(comment.body).lower():
+        if any(item in str(comment.body).lower() for item in ["en.wikipedia.org/wiki/", "en.m.wikipedia.org/wiki/"]):
             # Check if user is blacklisted (excluded)
             if not check_excluded(user_blacklist_file, str(comment.author)) == True:
                 # Check if id is in cache
@@ -469,7 +480,7 @@ def main():
                             urls = get_wikipedia_links(comment.body_html)
         
                             if not urls == []:
-                                comment_text = generate_comment(urls)
+                                comment_text = generate_comment(urls, comment_text=str(comment.body))
                                 comment_text = comment_text.replace("SUBREDDITNAMEHERE", str(comment.subreddit))
             
                                 if not comment_text == "Error":
@@ -494,7 +505,7 @@ while True:
         if not str(e) in errors_to_not_print:
             print(str(e))
 
-            # traceback.print_exc()
+            traceback.print_exc()
         
         
         time.sleep(0.5)
