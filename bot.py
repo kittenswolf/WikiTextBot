@@ -9,6 +9,7 @@ class logger:
 
 from bs4 import BeautifulSoup
 import urllib.request
+import bot_detector
 import functools
 import wikipedia
 import sentences
@@ -64,6 +65,7 @@ reddit = praw.Reddit(user_agent='*',
                      username=bot_username, password="*")
 logger.log(type="INFO", message="Logged in.")
 
+bot_detector.settings(reddit, False)
 
 def replace_right(source, target, replacement, replacements=None):
     return replacement.join(source.rsplit(target, replacements))
@@ -366,6 +368,17 @@ def parse_comment(comment):
         
     if comment.id in get_cache(cache_file):
         return
+        
+    # Emergency fix
+    if comment.author.name in ["AutoModerator", "HelperBot_"]:
+        return
+        
+    bot_score = bot_detector.calc_bot_score(comment.author.name)
+    if bot_score > 34:
+        logger.log(type="INFO", message="{} seems to be a bot (score: {}) Not responding.".format(comment.author.name, bot_score))
+        return
+    else:
+        logger.log(type="INFO", message="{} has a score of {}, responding.".format(comment.author.name, bot_score))
         
     urls = get_wikipedia_links(comment.body_html)
     
