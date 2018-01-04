@@ -24,6 +24,7 @@ msg_cache_file      = "cache/msg_cache.txt"
 cache_file          = "cache/com_cache.txt"
 user_blacklist_file = "user_blacklist.txt"
 
+reddit = None  # To be populated by login.
 num_sentences = 4
 
 bot_username = "WikiTextBot"
@@ -59,13 +60,16 @@ media_extensions = [".png", ".jpeg", ".jpg", ".bmp", ".svg", ".mp4", ".webm", "g
 
 intro_wikipedia_link = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&explaintext=&exintro=&exsentences=NUMHERE__1&titles="
 
-logger.log(type="INFO", message="Logging in...")
-reddit = praw.Reddit(user_agent='*',
-                     client_id="*", client_secret="*",
-                     username=bot_username, password="*")
-logger.log(type="INFO", message="Logged in.")
+def login():
+    """Log into Reddit."""
+    logger.log(type="INFO", message="Logging in...")
+    global reddit
+    reddit = praw.Reddit(user_agent='*',
+                         client_id="*", client_secret="*",
+                         username=bot_username, password="*")
+    logger.log(type="INFO", message="Logged in.")
 
-bot_detector.settings(reddit, False)
+    bot_detector.settings(reddit, False)
 
 def get_cache(file):
     """Gets the cache from $file and clears to len(comment_threshold) if necesarry. Also saves it after."""
@@ -386,18 +390,20 @@ def main():
         parse_comment(comment)
 
 
-while True:
-    try:
-        main()
-    except Exception as e:
-        if e == praw.exceptions.APIException:
-            logger.log(type="ERRROR", message="Ratelimit hit, sleeping 100 secs")
-            time.sleep(100)
-            
-        if not str(e) in errors_to_not_print:
-            logger.log(type="ERRROR", message=e)
+if __name__ == "__main__":
+    login()
+    while True:
+        try:
+            main()
+        except Exception as e:
+            if e == praw.exceptions.APIException:
+                logger.log(type="ERRROR", message="Ratelimit hit, sleeping 100 secs")
+                time.sleep(100)
 
-            traceback.print_exc()
-        
-        
-        time.sleep(0.5)
+            if not str(e) in errors_to_not_print:
+                logger.log(type="ERRROR", message=e)
+
+                traceback.print_exc()
+
+
+            time.sleep(0.5)
