@@ -45,10 +45,10 @@ footer_links = [
                  ["Donate", "https://www.reddit.com/r/WikiTextBot/wiki/donate"]
                ]
                
-downvote_remove = "^Downvote ^to ^remove"
                
-footer_seperator = "^|"
+downvote_remove = "^(Downvote to remove)"
 
+footer_seperator = "^( | )"
 disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
 body_disallowed_strings = ["From a modification: This is a redirect from a modification of the target's title or a closely related title. For example, the words may be rearranged, or punctuation may be different.", "From a miscapitalisation: This is a redirect from a miscapitalisation. The correct form is given by the target of the redirect.", "{\displaystyle"]
 
@@ -66,9 +66,6 @@ reddit = praw.Reddit(user_agent='*',
 logger.log(type="INFO", message="Logged in.")
 
 bot_detector.settings(reddit, False)
-
-def replace_right(source, target, replacement, replacements=None):
-    return replacement.join(source.rsplit(target, replacements))
 
 def get_cache(file):
     """Gets the cache from $file and clears to len(comment_threshold) if necesarry. Also saves it after."""
@@ -217,27 +214,16 @@ def get_wiki_text(original_link):
         return "Error"
        
        
-class generate_comment:
        
-    @functools.lru_cache(maxsize=10)       
+
+
+class generate_comment:
+
+    @functools.lru_cache(maxsize=10)
     def generate_footer():
-        footer = "^[ "
-
-        links = []
-        for link in footer_links:
-            final_desc = "^" + link[0].replace(" ", " ^")
-            final_link = "[" + final_desc + "](" + link[1] + ")"
-            links.append(final_link)
-
-        for link in links:
-            footer += link
-            footer += " " + footer_seperator + " "
-
-        footer += " ^]"
-        footer = replace_right(footer, footer_seperator, "", 1)
-    
-        footer += "\n" + downvote_remove + " ^| ^v0.28"
-
+        links = ["[^(%s)](%s)" % tuple(link) for link in footer_links]
+        footer = "^([ )%s^( ])" % footer_seperator.join(links)
+        footer += " " + downvote_remove + footer_seperator + "^v0.28"
         return footer
 
     def generate_comment(input_urls, comment_text=None):
