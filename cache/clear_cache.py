@@ -1,4 +1,3 @@
-
 files = ["com_cache.txt", "msg_cache.txt"]
 limit = 500
 
@@ -12,7 +11,6 @@ for file in files:
     last_part = current_ids[-limit:]
 
     print("New length: " + str(len(last_part)))
-
 
     with open(file, "w") as f:
         for id in last_part:

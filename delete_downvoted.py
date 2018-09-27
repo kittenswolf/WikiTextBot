@@ -14,11 +14,10 @@ reddit = praw.Reddit(user_agent='*',
 print("Logged in.")
 
 print("Checking comments..")
-                     
+
 for comment in reddit.redditor(bot_username).comments.controversial('all', limit=None):
     if comment.score <= delete_threshold:
         comment.delete()
         print(str(comment.score) + " got removed")
-        
+
 print("Done!")
-              

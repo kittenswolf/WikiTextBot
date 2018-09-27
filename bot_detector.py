@@ -3,18 +3,19 @@
 # If you dont want to see horrible code, please click away.
 # I can code better than this now, but I'm too lazy to rewrite it.
 # Submit a PR if you want to help.
-#------------------------------------------------------------------
+# ------------------------------------------------------------------
 
-import praw
 import datetime
 import difflib
+
 
 def score_helper(score):
     if score <= 34:
         return "-"
-        
+
     if score >= 35:
         return "+"
+
 
 def settings(input_reddit, debug_in):
     global im_a_bot
@@ -33,7 +34,7 @@ def settings(input_reddit, debug_in):
     # Calculate total time for have to be to count plus the fast_replies score
     global total_fast_reply_time
     total_fast_reply_time = int(amount_of_comments * fast_reply_in_seconds)
-    
+
     # How many "Im a bot"s in % (of 1) have to appear in all the comments analysed for it to count plus the im_a_bot_in_comment score
     global im_a_bot_ratio
     im_a_bot_ratio = 0.8
@@ -45,24 +46,26 @@ def settings(input_reddit, debug_in):
     global im_a_bot_in_comment
     global negative_substring_in_name
     global bot_in_robot
-    
+
     username_contains_bot = 20
     fast_replies = 30
     comments_similar = 25
     im_a_bot_in_comment = 20
 
     negative_substring_in_name = -15
-    bot_in_robot    = -5
-    
+    bot_in_robot = -5
+
     global reddit
     reddit = input_reddit
     global debug
     debug = debug_in
 
+
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
+
 
 def bot_in_word(input_text):
     if input_text[-4:].lower() == "_bot":
@@ -74,6 +77,7 @@ def bot_in_word(input_text):
 
     return False
 
+
 def checkword(check_against_type, check_against, input_word):
     if check_against_type.lower() == "list":
         for check_word in check_against:
@@ -82,8 +86,9 @@ def checkword(check_against_type, check_against, input_word):
     else:
         if check_against in input_word:
             return True
-            
+
     return False
+
 
 def calc_bot_score(input_user):
     bot_score = 0
@@ -97,44 +102,44 @@ def calc_bot_score(input_user):
 
     if checkword("list", negative_substrings, input_user):
         bot_score += negative_substring_in_name
-    
+
     if bot_in_word(input_user):
         bot_score += username_contains_bot
-    
+
     if "robot" in input_user.lower():
         bot_score += bot_in_robot
-    
+
     if debug == True:
         print("Bot name score: " + str(bot_score))
 
     # Check fast replys
     comment_bodies = [comment.body for comment in comments]
     comments_root = [comment.is_root for comment in comments]
-    
+
     # parent_ids = [comment.parent().fullname for comment in comments]
 
-    parent_ids = []    
+    parent_ids = []
     for comment in comments:
         if not comment.is_root:
             parent_ids.append(comment.parent().fullname)
-                
+
     parent_timestamps = [parent.created for parent in reddit.info(parent_ids)]
-        
+
     submission_fullnames = [comment.link_id for comment in comments]
     submission_timestamps = [submission.created for submission in reddit.info(submission_fullnames)]
-    
+
     if not len(comments) < amount_of_comments:
         total_time = 0
         while len(comments) != 0:
             comment = comments[0]
             comment_is_root = comments_root[0]
-        
+
             if comment_is_root == True:
 
                 submission_date = datetime.datetime.fromtimestamp(submission_timestamps[0])
-                comment_date    = datetime.datetime.fromtimestamp(comment.created)
+                comment_date = datetime.datetime.fromtimestamp(comment.created)
                 difference = (submission_date - comment_date).total_seconds()
-        
+
                 total_time += difference
             else:
                 # original_comment_id = comment.parent_id.split("t1_")[1]
@@ -142,27 +147,24 @@ def calc_bot_score(input_user):
                 # original_comment = reddit.comment(id=original_comment_id)
 
                 org_comment_date = datetime.datetime.fromtimestamp(parent_timestamps[0])
-                comment_date    = datetime.datetime.fromtimestamp(comment.created)
+                comment_date = datetime.datetime.fromtimestamp(comment.created)
                 difference = (org_comment_date - comment_date).total_seconds()
-        
+
                 total_time += difference
                 parent_timestamps.pop(0)
             if debug == True:
                 print("Difference: " + str(difference))
-                
+
             comments.pop(0)
             comments_root.pop(0)
-            
+
             submission_timestamps.pop(0)
 
-            
-
-
         total_time = int(total_time * -1)
-        
+
         if debug == True:
             print("Total comment time: " + str(total_time))
-    
+
         if total_time <= total_fast_reply_time:
             bot_score += fast_replies
         else:
@@ -173,9 +175,9 @@ def calc_bot_score(input_user):
 
         # Check comment similarity
         total_diff = 0
-    
+
         chunk_comments = chunks(comment_bodies, 2)
-        
+
         for chunk in chunk_comments:
             diff = difflib.SequenceMatcher(None, chunk[0], chunk[1]).ratio()
             total_diff += diff
@@ -186,13 +188,13 @@ def calc_bot_score(input_user):
         if debug == True:
             print("Not enough comments to determine score")
         return bot_score
-    
+
     if debug == True:
         print("Comment similarity: " + str(bot_score))
-    
+
     # Check if "Im a bot" (or similar) is in comment.body
     min_bot_comments = int(amount_of_comments * im_a_bot_ratio)
-    
+
     im_a_bot_num = 0
     for comment in comment_bodies:
         if im_a_bot_num < min_bot_comments:
@@ -201,9 +203,8 @@ def calc_bot_score(input_user):
                     if debug == True:
                         print("Im a bot detected")
                     im_a_bot_num += 1
-                    
+
     if im_a_bot_num == min_bot_comments:
         bot_score += im_a_bot_in_comment
-
 
     return bot_score
