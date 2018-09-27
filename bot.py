@@ -2,75 +2,27 @@
 # Bot in action: reddit.com/u/WikiTextBot
 # reddit.com/u/kittens_from_space
 
-import time
-
-
-class logger:
-    def log(*, type, message):
-        print("[" + time.ctime() + "] [" + str(type) + "]: " + str(message))
-
-
-from bs4 import BeautifulSoup
-import urllib.request
-import bot_detector
 import functools
-import wikipedia
-import sentences
-import traceback
 import json
-import praw
 import re
+import time
+import traceback
+import urllib.request
 
-# Settings 
+import praw
+import wikipedia
+from bs4 import BeautifulSoup
 
-msg_cache_file = "cache/msg_cache.txt"
-cache_file = "cache/com_cache.txt"
-user_blacklist_file = "user_blacklist.txt"
+import bot_detector
+import sentences
+from constants import *
+from logger import Logger, LogTypes
 
-num_sentences = 4
-
-bot_username = "WikiTextBot"
-
-exclude_strings = ["Exclude me", "Exclude from subreddit"]
-include = "IncludeMe"
-
-user_already_excluded = "You already seem to be excluded from the bot.\n\nTo be included again, message me '" + include + "'.\n\nHave a nice day!"
-user_exclude_done = "Done! If you want to be included again, message me '" + include + "'.\n\nHave a nice day!"
-user_include_done = "Done!\n\nHave a nice day!"
-user_not_excluded = "It seems you are not excluded from the bot. If you think this is false, [message](https://www.reddit.com/message/compose?to=kittens_from_space) me.\n\nHave a nice day!"
-
-footer_links = [
-    ["PM", "https://www.reddit.com/message/compose?to=kittens_from_space"],
-    [exclude_strings[0],
-     "https://reddit.com/message/compose?to=WikiTextBot&message=" + exclude_strings[0].replace(" ", "") + "&subject=" +
-     exclude_strings[0].replace(" ", "")],
-    [exclude_strings[1], "https://np.reddit.com/r/SUBREDDITNAMEHERE/about/banned"],
-    ["FAQ / Information", "https://np.reddit.com/r/WikiTextBot/wiki/index"],
-    ["Source", "https://github.com/kittenswolf/WikiTextBot"],
-    ["Donate", "https://www.reddit.com/r/WikiTextBot/wiki/donate"]
-]
-
-downvote_remove = "^Downvote ^to ^remove"
-
-footer_seperator = "^|"
-
-disallowed_strings = ["List of", "Glossary of", "Category:", "File:", "Wikipedia:"]
-body_disallowed_strings = [
-    "From a modification: This is a redirect from a modification of the target's title or a closely related title. For example, the words may be rearranged, or punctuation may be different.",
-    "From a miscapitalisation: This is a redirect from a miscapitalisation. The correct form is given by the target of the redirect.",
-    "{\displaystyle"]
-
-errors_to_not_print = ["received 403 HTTP response"]
-
-media_extensions = [".png", ".jpeg", ".jpg", ".bmp", ".svg", ".mp4", ".webm", "gif", ".gifv", ".flv", ".wmv", ".amv"]
-
-intro_wikipedia_link = "https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts&explaintext=&exintro=&exsentences=NUMHERE__1&titles="
-
-logger.log(type="INFO", message="Logging in...")
+Logger.log(type=LogTypes.INFO, message="Logging in...")
 reddit = praw.Reddit(user_agent='*',
                      client_id="*", client_secret="*",
                      username=bot_username, password="*")
-logger.log(type="INFO", message="Logged in.")
+Logger.log(type=LogTypes.INFO, message="Logged in.")
 
 bot_detector.settings(reddit, False)
 
@@ -84,11 +36,11 @@ def get_cache(file):
     try:
         raw_cache = open(file, "r").read()
     except Exception as e:
-        logger.log(type="ERRROR", message="{} doesn't exist?".format(file))
+        Logger.log(type=LogTypes.ERROR, message="{} doesn't exist?".format(file))
         return []
 
     cache = [id for id in raw_cache.split("\n")]
-    return [item for item in cache if not item == '']
+    return [item for item in cache if item != '']
 
 
 def input_cache(file, input):
@@ -96,8 +48,7 @@ def input_cache(file, input):
         with open(file, "a") as f:
             f.write(input + "\n")
     except Exception as e:
-        logger.log(type="ERRROR", message="{} doesn't exist?".format(file))
-        return
+        Logger.log(type=LogTypes.ERROR, message="{} doesn't exist?".format(file))
 
 
 def locateByName(e, name):
@@ -106,10 +57,9 @@ def locateByName(e, name):
 
     for child in e.get('children', []):
         result = locateByName(child, name)
+
         if result is not None:
             return result
-
-    return None
 
 
 def get_wikipedia_links(input_text):
@@ -224,12 +174,12 @@ def get_wiki_text(original_link):
 
         return [title, body]
     except Exception as e:
-        logger.log(type="INFO", message="Error '{}' in get_wiki_text() with link {}".format(e, original_link))
+        Logger.log(type=LogTypes.INFO, message="Error '{}' in get_wiki_text() with link {}".format(e, original_link))
         return "Error"
 
 
-class generate_comment:
-
+class GenerateComment:
+    @staticmethod
     @functools.lru_cache(maxsize=10)
     def generate_footer():
         footer = "^[ "
@@ -251,6 +201,7 @@ class generate_comment:
 
         return footer
 
+    @staticmethod
     def generate_comment(input_urls, comment_text=None):
         comment = []
         content = []
@@ -259,7 +210,7 @@ class generate_comment:
         for url in input_urls:
             url_content = get_wiki_text(url)
 
-            if not url_content == "Error":
+            if url_content != "Error":
                 content.append(url_content)
 
             if url_content[1].split(".")[0] in comment_text:
@@ -281,32 +232,31 @@ class generate_comment:
         for line in comment:
             done_comment.append(line + "\n")
 
-        done_comment.append(generate_comment.generate_footer())
+        done_comment.append(GenerateComment.generate_footer())
         comment = ''.join(done_comment)
 
         return comment
 
 
-class exclude:
+class Exclude:
+    @staticmethod
     def check_excluded(file, input_user):
         try:
             raw_file = open(file, "r").read()
         except Exception as e:
-            logger.log(type="ERRROR", message="{} doesn't exist?".format(file))
+            Logger.log(type=LogTypes.ERROR, message="{} doesn't exist?".format(file))
             return
 
         current_excluded = [user.lower() for user in raw_file.split("\n")]
 
-        if input_user.lower() in current_excluded:
-            return True
-        else:
-            return False
+        return input_user.lower() in current_excluded
 
+    @staticmethod
     def excludeUser(file, input_user):
         try:
             raw_file = open(file, "r").read()
         except Exception as e:
-            logger.log(type="ERRROR", message="{} doesn't exist?".format(file))
+            Logger.log(type=LogTypes.ERROR, message="{} doesn't exist?".format(file))
             return
 
         current_excluded = [user.lower() for user in raw_file.split("\n") if not user.replace(" ", "") == ""]
@@ -316,25 +266,27 @@ class exclude:
             for user in current_excluded:
                 f.write(user + "\n")
 
-    def includeUser(file, input_user):
+    @staticmethod
+    def include_user(file, input_user):
         try:
             raw_file = open(file, "r").read()
         except Exception as e:
-            logger.log(type="ERRROR", message="{} doesn't exist?".format(file))
+            Logger.log(type=LogTypes.ERROR, message="{} doesn't exist?".format(file))
             return
 
         try:
             current_excluded = [user.lower() for user in raw_file.split("\n")]
             current_excluded.remove(input_user)
+
+            with open(file, "w") as f:
+                for user in current_excluded:
+                    f.write(user + "\n")
+
         except Exception:
-            pass
-
-        with open(file, "w") as f:
-            for user in current_excluded:
-                f.write(user + "\n")
+            return
 
 
-def monitorMessages():
+def monitor_messages():
     """Monitors the newest 100 messages and excludes/includes users requesting it."""
 
     for message in reddit.inbox.messages(limit=100):
@@ -343,24 +295,23 @@ def monitorMessages():
         if not message.id in current_msg_cache:
             author = str(message.author)
 
-            if not author == bot_username:
-
+            if author != bot_username:
                 if exclude_strings[0].replace(" ", "").lower() == message.subject.lower():
-                    already_excluded = exclude.check_excluded(user_blacklist_file, author)
+                    already_excluded = Exclude.check_excluded(user_blacklist_file, author)
 
                     if already_excluded:
                         message.reply(user_already_excluded)
                     else:
-                        logger.log(type="INFO", message="Excluding user {}".format(author))
-                        exclude.excludeUser(user_blacklist_file, author)
+                        Logger.log(type=LogTypes.INFO, message="Excluding user {}".format(author))
+                        Exclude.excludeUser(user_blacklist_file, author)
                         message.reply(user_exclude_done)
 
                 if include.lower() == message.subject.lower():
-                    already_excluded = exclude.check_excluded(user_blacklist_file, author)
+                    already_excluded = Exclude.check_excluded(user_blacklist_file, author)
 
                     if already_excluded:
-                        logger.log(type="INFO", message="Including user {}".format(author))
-                        exclude.includeUser(user_blacklist_file, author)
+                        Logger.log(type=LogTypes.INFO, message="Including user {}".format(author))
+                        Exclude.include_user(user_blacklist_file, author)
                         message.reply(user_include_done)
                     else:
                         message.reply(user_not_excluded)
@@ -372,7 +323,7 @@ def parse_comment(comment):
     if not any(item in str(comment.body).lower() for item in ["en.wikipedia.org/wiki/", "en.m.wikipedia.org/wiki/"]):
         return
 
-    if exclude.check_excluded(user_blacklist_file, str(comment.author)):
+    if Exclude.check_excluded(user_blacklist_file, str(comment.author)):
         return
 
     if comment.id in get_cache(cache_file):
@@ -384,20 +335,21 @@ def parse_comment(comment):
 
     bot_score = bot_detector.calc_bot_score(comment.author.name)
     if bot_score > 34:
-        logger.log(type="INFO",
+        Logger.log(type=LogTypes.INFO,
                    message="{} seems to be a bot (score: {}) Not responding.".format(comment.author.name, bot_score))
         return
     else:
-        logger.log(type="INFO", message="{} has a score of {}, responding.".format(comment.author.name, bot_score))
+        Logger.log(type=LogTypes.INFO,
+                   message="{} has a score of {}, responding.".format(comment.author.name, bot_score))
 
     urls = get_wikipedia_links(comment.body_html)
 
-    if not urls == []:
-        comment_text = generate_comment.generate_comment(urls, comment_text=str(comment.body))
+    if urls:
+        comment_text = GenerateComment.generate_comment(urls, comment_text=str(comment.body))
         comment_text = comment_text.replace("SUBREDDITNAMEHERE", str(comment.subreddit))
 
-        if not comment_text == "Error":
-            logger.log(type="INFO",
+        if comment_text != "Error":
+            Logger.log(type=LogTypes.INFO,
                        message="Replying to user {} in subreddit /r/{}".format(comment.author, comment.subreddit))
             comment.reply(comment_text)
 
@@ -405,7 +357,7 @@ def parse_comment(comment):
 
 
 def main():
-    monitorMessages()
+    monitor_messages()
     for comment in reddit.subreddit('all').comments(limit=100):
         parse_comment(comment)
 
@@ -415,11 +367,11 @@ while True:
         main()
     except Exception as e:
         if e == praw.exceptions.APIException:
-            logger.log(type="ERRROR", message="Ratelimit hit, sleeping 100 secs")
+            Logger.log(type=LogTypes.ERROR, message="Ratelimit hit, sleeping 100 secs")
             time.sleep(100)
 
         if not str(e) in errors_to_not_print:
-            logger.log(type="ERRROR", message=e)
+            Logger.log(type=LogTypes.ERROR, message=e)
 
             traceback.print_exc()
 

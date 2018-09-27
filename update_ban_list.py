@@ -39,12 +39,7 @@ def get_current_bans(wiki_page):
 
     list_bans = [item.replace("|", "").replace("\r", "") for item in list.split("\n")]
 
-    list = []
-    for item in list_bans:
-        if not item == '':
-            list.append(item)
-
-    return list
+    return [item for item in list_bans if item]
 
 
 def enter_sub(wiki_page, input_sub):
