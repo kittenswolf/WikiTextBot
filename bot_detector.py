@@ -10,11 +10,7 @@ import difflib
 
 
 def score_helper(score):
-    if score <= 34:
-        return "-"
-
-    if score >= 35:
-        return "+"
+    return "-" if score <= 34 else "+"
 
 
 def settings(input_reddit, debug_in):
@@ -109,7 +105,7 @@ def calc_bot_score(input_user):
     if "robot" in input_user.lower():
         bot_score += bot_in_robot
 
-    if debug == True:
+    if debug:
         print("Bot name score: " + str(bot_score))
 
     # Check fast replys
@@ -134,7 +130,7 @@ def calc_bot_score(input_user):
             comment = comments[0]
             comment_is_root = comments_root[0]
 
-            if comment_is_root == True:
+            if comment_is_root:
 
                 submission_date = datetime.datetime.fromtimestamp(submission_timestamps[0])
                 comment_date = datetime.datetime.fromtimestamp(comment.created)
@@ -152,7 +148,7 @@ def calc_bot_score(input_user):
 
                 total_time += difference
                 parent_timestamps.pop(0)
-            if debug == True:
+            if debug:
                 print("Difference: " + str(difference))
 
             comments.pop(0)
@@ -162,7 +158,7 @@ def calc_bot_score(input_user):
 
         total_time = int(total_time * -1)
 
-        if debug == True:
+        if debug:
             print("Total comment time: " + str(total_time))
 
         if total_time <= total_fast_reply_time:
@@ -170,7 +166,7 @@ def calc_bot_score(input_user):
         else:
             bot_score += int((fast_replies * -1) / 2)
 
-        if debug == True:
+        if debug:
             print("Fast reply score: " + str(bot_score))
 
         # Check comment similarity
@@ -185,11 +181,11 @@ def calc_bot_score(input_user):
         total_diff = int(total_diff * 7.5)
         bot_score += total_diff
     else:
-        if debug == True:
+        if debug:
             print("Not enough comments to determine score")
         return bot_score
 
-    if debug == True:
+    if debug:
         print("Comment similarity: " + str(bot_score))
 
     # Check if "Im a bot" (or similar) is in comment.body
@@ -200,7 +196,7 @@ def calc_bot_score(input_user):
         if im_a_bot_num < min_bot_comments:
             for variation in im_a_bot:
                 if variation.lower() in comment.lower():
-                    if debug == True:
+                    if debug:
                         print("Im a bot detected")
                     im_a_bot_num += 1
 

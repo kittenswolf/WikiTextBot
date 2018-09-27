@@ -177,7 +177,7 @@ def get_wiki_text(original_link):
 
             final_text = []
             for sentence in list_trimmed_text:
-                if final_text == []:
+                if not final_text:
                     final_text.append(sentence)
                 else:
                     final_text.append(" " + sentence)
@@ -275,7 +275,7 @@ class generate_comment:
             comment.append(body)
             comment.append("\n***\n")
 
-        if comment == []:
+        if not comment:
             return "Error"
 
         for line in comment:
@@ -348,7 +348,7 @@ def monitorMessages():
                 if exclude_strings[0].replace(" ", "").lower() == message.subject.lower():
                     already_excluded = exclude.check_excluded(user_blacklist_file, author)
 
-                    if already_excluded == True:
+                    if already_excluded:
                         message.reply(user_already_excluded)
                     else:
                         logger.log(type="INFO", message="Excluding user {}".format(author))
@@ -358,7 +358,7 @@ def monitorMessages():
                 if include.lower() == message.subject.lower():
                     already_excluded = exclude.check_excluded(user_blacklist_file, author)
 
-                    if already_excluded == True:
+                    if already_excluded:
                         logger.log(type="INFO", message="Including user {}".format(author))
                         exclude.includeUser(user_blacklist_file, author)
                         message.reply(user_include_done)
@@ -372,7 +372,7 @@ def parse_comment(comment):
     if not any(item in str(comment.body).lower() for item in ["en.wikipedia.org/wiki/", "en.m.wikipedia.org/wiki/"]):
         return
 
-    if exclude.check_excluded(user_blacklist_file, str(comment.author)) == True:
+    if exclude.check_excluded(user_blacklist_file, str(comment.author)):
         return
 
     if comment.id in get_cache(cache_file):
