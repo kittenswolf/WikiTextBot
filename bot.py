@@ -218,7 +218,7 @@ class generate_comment:
         """
         Rather than placing a ^ before every word, we can wrap the entire post in ^(...), to get a more consistent and professional footer.
         """
-        return "^([ " + " | ".join(["[" + link[0] + "](" + link[1] + ")" for link in footer_links]) + " ] Downvote to remove | v0.28)"
+        return "^([ )" + "^( | )".join(["[^(" + link[0] + ")](" + link[1] + ")" for link in footer_links]) + "^( ] Downvote to remove | v0.28)"
 
     def generate_comment(input_urls, comment_text=None):
         comment      = []
