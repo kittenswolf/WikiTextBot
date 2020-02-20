@@ -379,7 +379,7 @@ def main():
     for comment in reddit.subreddit('all').comments(limit=100):
         parse_comment(comment)
 
-breakpoint()
+
 while True:
     try:
         main()
